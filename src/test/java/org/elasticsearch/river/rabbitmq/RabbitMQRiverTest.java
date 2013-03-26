@@ -1,65 +1,74 @@
-/*
- * Licensed to ElasticSearch and Shay Banon under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. ElasticSearch licenses this
- * file to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package org.elasticsearch.river.rabbitmq;
 
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.QueueingConsumer;
+import com.sun.corba.se.impl.logging.ORBUtilSystemException;
+import org.elasticsearch.client.Client;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.ImmutableSettings;
-import org.elasticsearch.node.Node;
-import org.elasticsearch.node.NodeBuilder;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.river.RiverName;
+import org.elasticsearch.river.RiverSettings;
+import org.mockito.InOrder;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
-import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
+
+import static com.jayway.awaitility.Awaitility.with;
+import static org.mockito.Mockito.*;
 
 /**
- *
+ * User: andyolliver
+ * Date: 26/02/2013
  */
-public class RabbitMQRiverTest {
+public class RabbitmqRiverTest {
 
-    public static void main(String[] args) throws Exception {
-
-        Node node = NodeBuilder.nodeBuilder().settings(ImmutableSettings.settingsBuilder().put("gateway.type", "none")).node();
-
-        node.client().prepareIndex("_river", "test1", "_meta").setSource(jsonBuilder().startObject().field("type", "rabbitmq").endObject()).execute().actionGet();
-
-        ConnectionFactory cfconn = new ConnectionFactory();
-        cfconn.setHost("localhost");
-        cfconn.setPort(AMQP.PROTOCOL.PORT);
-        Connection conn = cfconn.newConnection();
-
-        Channel ch = conn.createChannel();
-        ch.exchangeDeclare("elasticsearch", "direct", true);
-        ch.queueDeclare("elasticsearch", true, false, false, null);
-
-        String message = "{ \"index\" : { \"_index\" : \"test\", \"_type\" : \"type1\", \"_id\" : \"1\" }\n" +
-                "{ \"type1\" : { \"field1\" : \"value1\" } }\n" +
-                "{ \"delete\" : { \"_index\" : \"test\", \"_type\" : \"type1\", \"_id\" : \"2\" } }\n" +
-                "{ \"create\" : { \"_index\" : \"test\", \"_type\" : \"type1\", \"_id\" : \"1\" }\n" +
-                "{ \"type1\" : { \"field1\" : \"value1\" } }";
-
-        ch.basicPublish("elasticsearch", "elasticsearch", null, message.getBytes());
-
-        ch.close();
-        conn.close();
-
-        Thread.sleep(100000);
+    @BeforeClass
+    public void oneTimeSetUp() {
+        Loggers.enableConsoleLogging();
     }
+
+    @Test
+    public void textSetUpAndRunConsumer() throws IOException, InterruptedException {
+        RiverName riverName = new RiverName("rabbitmq", "rabbitmq");
+        Settings globalSettings = ImmutableSettings.settingsBuilder().build();
+        Map riverSettingsMap = new HashMap<String, Object>();
+        RiverSettings riverSettings = new RiverSettings(globalSettings, riverSettingsMap);
+
+        Client mockClient = mock(Client.class);
+        final RabbitmqRiver rabbitmqRiver = new RabbitmqRiver(riverName, riverSettings, mockClient);
+        RabbitmqConsumerFactory mockRabbitmqConsumerFactory = mock(RabbitmqConsumerFactory.class);
+        final RabbitmqConsumer mockRabbitmqConsumer = mock(RabbitmqConsumer.class);
+
+        when(mockRabbitmqConsumerFactory.newConsumer()).thenReturn(mockRabbitmqConsumer);
+
+        rabbitmqRiver.setRabbitmqConsumerFactory(mockRabbitmqConsumerFactory);
+        rabbitmqRiver.start();
+
+        InOrder inOrder = inOrder(mockRabbitmqConsumerFactory, mockRabbitmqConsumer);
+
+        inOrder.verify(mockRabbitmqConsumerFactory).newConsumer();
+        inOrder.verify(mockRabbitmqConsumer).setLogger(any(ESLogger.class));
+        inOrder.verify(mockRabbitmqConsumer).setConfig(any(RabbitmqRiverConfigHolder.class));
+        inOrder.verify(mockRabbitmqConsumer).setConnectionFactory(any(ConnectionFactory.class));
+        inOrder.verify(mockRabbitmqConsumer).setQueueingConsumerFactory(any(QueueingConsumerFactory.class));
+        inOrder.verify(mockRabbitmqConsumer).setClient(mockClient);
+        inOrder.verify(mockRabbitmqConsumer).run();
+        inOrder.verifyNoMoreInteractions();
+
+        rabbitmqRiver.close();
+
+        verify(mockRabbitmqConsumer).setClosed();
+        verifyNoMoreInteractions(mockRabbitmqConsumer);
+
+    }
+
 }
