@@ -12,15 +12,8 @@
             <useTransitiveFiltering>true</useTransitiveFiltering>
             <excludes>
                 <exclude>org.elasticsearch:elasticsearch</exclude>
+                <exclude>log4j:log4j</exclude>
             </excludes>
-        </dependencySet>
-        <dependencySet>
-            <outputDirectory>/</outputDirectory>
-            <useProjectArtifact>true</useProjectArtifact>
-            <useTransitiveFiltering>true</useTransitiveFiltering>
-            <includes>
-                <include>com.rabbitmq:amqp-client</include>
-            </includes>
         </dependencySet>
     </dependencySets>
 </assembly>

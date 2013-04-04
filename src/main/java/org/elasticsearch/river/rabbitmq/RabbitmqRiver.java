@@ -20,24 +20,15 @@
 package org.elasticsearch.river.rabbitmq;
 
 import com.rabbitmq.client.*;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.bulk.BulkRequestBuilder;
-import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.collect.Lists;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.EsExecutors;
-import org.elasticsearch.common.xcontent.support.XContentMapValues;
 import org.elasticsearch.river.AbstractRiverComponent;
 import org.elasticsearch.river.River;
 import org.elasticsearch.river.RiverName;
 import org.elasticsearch.river.RiverSettings;
 
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -67,6 +58,14 @@ public class RabbitmqRiver extends AbstractRiverComponent implements River {
             rabbitSettings = new HashMap<String, Object>();
         }
 
+        Map<String, Object> responseChannelSettings;
+                if (settings.settings().containsKey("responseChannel")) {
+                    responseChannelSettings = (Map<String, Object>) settings.settings().get("responseChannel");
+                } else {
+                    // use default settings - pass in empty settings Hash
+                    responseChannelSettings = new HashMap<String, Object>();
+                }
+
         Map<String, Object> indexSettings;
         if (settings.settings().containsKey("index")) {
             indexSettings = (Map<String, Object>) settings.settings().get("index");
@@ -75,7 +74,7 @@ public class RabbitmqRiver extends AbstractRiverComponent implements River {
             indexSettings = new HashMap<String, Object>();
         }
 
-        configHolder = new RabbitmqRiverConfigHolder(rabbitSettings, indexSettings);
+        configHolder = new RabbitmqRiverConfigHolder(rabbitSettings, responseChannelSettings, indexSettings);
     }
 
     /**
@@ -90,9 +89,9 @@ public class RabbitmqRiver extends AbstractRiverComponent implements River {
     @Override
     public void start() {
         logger.info("creating rabbitmq river, addresses [{}], user [{}], vhost [{}]",
-                configHolder.getRabbitAddresses(),
-                configHolder.getRabbitUser(),
-                configHolder.getRabbitVhost());
+                configHolder.getIndexAddresses(),
+                configHolder.getIndexUser(),
+                configHolder.getIndexVhost());
 
         rabbitmqConsumer = rabbitmqConsumerFactory.newConsumer();
         rabbitmqConsumer.setLogger(logger);
