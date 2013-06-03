@@ -220,7 +220,7 @@ class RabbitmqConsumer implements Runnable {
                             String failureMsg = null;
                             if (response.hasFailures()) {
                                 failureMsg = response.buildFailureMessage();
-                                logger.warn("failed to execute" + failureMsg);
+                                logger.warn("failed to execute: " + failureMsg);
                             }
 
                             for (IndexingMsgDetail indexingMsgDetail : indexingMsgDetails) {
